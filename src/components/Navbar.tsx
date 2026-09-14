@@ -7,6 +7,7 @@ import { VercelConnectModal } from './integration/VercelConnectModal';
 import { PCAuthorizationManager } from './security/PCAuthorizationManager';
 import { MemberRegistrationPortal } from './auth/MemberRegistrationPortal';
 import { GoogleAuthModal } from './auth/GoogleAuthModal';
+import { ErrorButton } from './ErrorButton';
 import {
   Activity,
   UserCheck,
@@ -109,6 +110,8 @@ export const Navbar: React.FC<{
               <LogIn className="w-3.5 h-3.5 text-sky-600" />
               <span>Google Sign-In</span>
             </button>
+
+            <ErrorButton />
           </div>
 
           {/* Center-Right: Clinic Switcher */}

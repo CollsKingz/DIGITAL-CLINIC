@@ -15,6 +15,7 @@ import { VercelConnectModal } from './components/integration/VercelConnectModal'
 import { PCAuthorizationManager } from './components/security/PCAuthorizationManager';
 import { MemberRegistrationPortal } from './components/auth/MemberRegistrationPortal';
 import { GoogleAuthModal } from './components/auth/GoogleAuthModal';
+import { ErrorButton } from './components/ErrorButton';
 import { Base45Logo } from './components/brand/Base45Logo';
 import { HouseholdProxy } from './types/schema';
 import {
@@ -106,6 +107,8 @@ const MainAppContent: React.FC = () => {
               <LogIn className="w-3.5 h-3.5 text-sky-400" />
               <span>Continue with Google</span>
             </button>
+            <span>•</span>
+            <ErrorButton />
           </div>
         </div>
       </div>
