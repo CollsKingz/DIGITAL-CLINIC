@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Registered app user profile containing role, contact, and proxy linkages.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 100 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "role": {
+          "type": "string",
+          "enum": ["patient", "clerk", "pharmacist", "doctor", "admin"]
+        },
+        "clinicId": { "type": "string", "maxLength": 128 },
+        "idNumber": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "role"]
+    },
+    "HouseholdProxy": {
+      "title": "Household Proxy Dependent",
+      "description": "Elderly, minor, or vulnerable family member managed by a primary user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "primaryUserId": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "relationship": {
+          "type": "string",
+          "enum": ["parent", "grandparent", "child", "spouse", "other"]
+        },
+        "idNumber": { "type": "string", "maxLength": 30 },
+        "dateOfBirth": { "type": "string", "maxLength": 10 },
+        "chronicConditions": { "type": "string", "maxLength": 500 },
+        "allergies": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "primaryUserId", "fullName", "relationship"]
+    },
+    "Clinic": {
+      "title": "Healthcare Clinic",
+      "description": "Physical health center or clinic facility.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "code": { "type": "string", "maxLength": 20 },
+        "address": { "type": "string", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "operatingHours": { "type": "string", "maxLength": 100 },
+        "currentQueueCount": { "type": "integer" }
+      },
+      "required": ["id", "name", "code"]
+    },
+    "Appointment": {
+      "title": "Patient Appointment",
+      "description": "Scheduled clinic consultation or service booking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "clinicId": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "proxyId": { "type": "string", "maxLength": 128 },
+        "isProxyBooking": { "type": "boolean" },
+        "serviceType": {
+          "type": "string",
+          "enum": ["General Consult", "Chronic Refill", "Vaccination", "Antenatal", "Vitals Check", "Emergency Triage"]
+        },
+        "reason": { "type": "string", "maxLength": 500 },
+        "scheduledDate": { "type": "string", "maxLength": 10 },
+        "timeSlot": { "type": "string", "maxLength": 20 },
+        "status": {
+          "type": "string",
+          "enum": ["scheduled", "checked_in", "in_queue", "completed", "cancelled", "no_show"]
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "standard", "urgent", "emergency"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clinicId", "patientId", "serviceType", "scheduledDate", "status"]
+    },
+    "QueueItem": {
+      "title": "Live Clinic Queue Ticket",
+      "description": "Active real-time ticket tracking patient progression through clinic stages.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ticketNumber": { "type": "string", "maxLength": 10 },
+        "clinicId": { "type": "string", "maxLength": 128 },
+        "appointmentId": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "isProxy": { "type": "boolean" },
+        "proxyName": { "type": "string", "maxLength": 100 },
+        "stage": {
+          "type": "string",
+          "enum": ["Checked In", "At Vitals", "At Consult", "At Pharmacy", "Completed", "Transferred"]
+        },
+        "assignedRoom": { "type": "string", "maxLength": 50 },
+        "assignedStaff": { "type": "string", "maxLength": 100 },
+        "vitals": { "type": "object" },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "standard", "urgent", "emergency"]
+        },
+        "estimatedWaitMins": { "type": "integer" },
+        "checkInTime": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticketNumber", "clinicId", "patientId", "stage", "priority"]
+    },
+    "MedicationRequest": {
+      "title": "Chronic & Prescription Medication Request",
+      "description": "Prescription batching and collection order for chronic or acute meds.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "clinicId": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "prescribedBy": { "type": "string", "maxLength": 100 },
+        "medications": { "type": "array" },
+        "isBatchPrepared": { "type": "boolean" },
+        "status": {
+          "type": "string",
+          "enum": ["requested", "preparing", "ready_for_pickup", "collected", "expired"]
+        },
+        "collectionLockerOrCounter": { "type": "string", "maxLength": 50 },
+        "requestDate": { "type": "string", "maxLength": 10 },
+        "readyByDate": { "type": "string", "maxLength": 10 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clinicId", "patientId", "status"]
+    },
+    "Notification": {
+      "title": "User Notification",
+      "description": "Alert or push notification sent to a patient or clinic worker.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "body": { "type": "string", "maxLength": 500 },
+        "type": {
+          "type": "string",
+          "enum": ["queue_update", "appointment_reminder", "medication_ready", "system"]
+        },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "body", "type"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection."
+    },
+    "users/{userId}/householdProxies/{proxyId}": {
+      "schema": { "$ref": "#/entities/HouseholdProxy" },
+      "description": "Proxies/dependents linked to a primary user."
+    },
+    "clinics/{clinicId}": {
+      "schema": { "$ref": "#/entities/Clinic" },
+      "description": "Healthcare facility records."
+    },
+    "appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Patient appointments collection."
+    },
+    "queues/{queueId}": {
+      "schema": { "$ref": "#/entities/QueueItem" },
+      "description": "Live real-time patient queue records."
+    },
+    "medication_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/MedicationRequest" },
+      "description": "Prescription and chronic batch collection orders."
+    },
+    "notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User alerts and notifications."
+    }
+  }
+}

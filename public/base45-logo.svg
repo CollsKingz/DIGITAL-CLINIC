@@ -1,0 +1,28 @@
+<svg width="240" height="60" viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="b4-teal-grad" x1="0" y1="0" x2="50" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#00E5FF" />
+      <stop offset="100%" stopColor="#0072FF" />
+    </linearGradient>
+    <linearGradient id="b4-orange-grad" x1="20" y1="0" x2="70" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stopColor="#FF9100" />
+      <stop offset="100%" stopColor="#FF3D00" />
+    </linearGradient>
+  </defs>
+  <!-- Isometric B4 Mark -->
+  <g transform="translate(5, 5) scale(0.45)">
+    <polygon points="15,75 50,95 85,75 50,55" fill="#0A192F" stroke="#00E5FF" stroke-width="2" opacity="0.4" />
+    <path d="M25 65 L25 25 L48 20 L58 35 L48 45 L62 55 L48 72 Z" fill="url(#b4-teal-grad)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.5" />
+    <path d="M50 45 L78 20 L92 48 L104 48 L104 62 L92 62 L92 78 L78 78 L78 62 L64 62 Z" fill="url(#b4-orange-grad)" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.5" />
+    <circle cx="35" cy="35" r="3" fill="#FFFFFF" />
+    <circle cx="75" cy="35" r="3" fill="#FFFFFF" />
+    <circle cx="65" cy="72" r="3" fill="#FFFFFF" />
+  </g>
+  <!-- Brand Text -->
+  <text x="65" y="32" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="22" fill="#0F172A" letter-spacing="1">
+    BASE <tspan fill="#FF8C00">45</tspan>
+  </text>
+  <text x="65" y="47" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="9" fill="#64748B" letter-spacing="3.5">
+    INNOVATION GROUP
+  </text>
+</svg>

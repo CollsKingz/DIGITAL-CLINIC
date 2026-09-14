@@ -1,0 +1,194 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net - Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : 'patient';
+    }
+
+    function isStaff() {
+      let role = getUserRole();
+      return role == 'clerk' || role == 'doctor' || role == 'pharmacist' || role == 'admin';
+    }
+
+    function isClerkOrAdmin() {
+      let role = getUserRole();
+      return role == 'clerk' || role == 'admin';
+    }
+
+    function isDoctorOrAdmin() {
+      let role = getUserRole();
+      return role == 'doctor' || role == 'admin';
+    }
+
+    function isPharmacistOrAdmin() {
+      let role = getUserRole();
+      return role == 'pharmacist' || role == 'admin';
+    }
+
+    function isAdmin() {
+      return getUserRole() == 'admin';
+    }
+
+    // --- Entity Validation Helpers ---
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'role']) &&
+        data.uid is string && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+        data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
+        data.email is string && data.email.size() <= 100 &&
+        data.role in ['patient', 'clerk', 'pharmacist', 'doctor', 'admin'];
+    }
+
+    function isValidHouseholdProxy(data, primaryUserId) {
+      return data.keys().hasAll(['id', 'primaryUserId', 'fullName', 'relationship']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.primaryUserId is string && data.primaryUserId == primaryUserId &&
+        data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
+        data.relationship in ['parent', 'grandparent', 'child', 'spouse', 'other'];
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['id', 'clinicId', 'patientId', 'serviceType', 'scheduledDate', 'status', 'priority']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.clinicId is string && data.clinicId.size() <= 128 &&
+        data.patientId is string && data.patientId.size() <= 128 &&
+        data.serviceType in ['General Consult', 'Chronic Refill', 'Vaccination', 'Antenatal', 'Vitals Check', 'Emergency Triage'] &&
+        data.scheduledDate is string && data.scheduledDate.size() <= 10 &&
+        data.status in ['scheduled', 'checked_in', 'in_queue', 'completed', 'cancelled', 'no_show'] &&
+        data.priority in ['low', 'standard', 'urgent', 'emergency'];
+    }
+
+    function isValidQueueItem(data) {
+      return data.keys().hasAll(['id', 'ticketNumber', 'clinicId', 'patientId', 'stage', 'priority']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.ticketNumber is string && data.ticketNumber.size() <= 10 &&
+        data.clinicId is string && data.clinicId.size() <= 128 &&
+        data.patientId is string && data.patientId.size() <= 128 &&
+        data.stage in ['Checked In', 'At Vitals', 'At Consult', 'At Pharmacy', 'Completed', 'Transferred'] &&
+        data.priority in ['low', 'standard', 'urgent', 'emergency'];
+    }
+
+    function isValidMedicationRequest(data) {
+      return data.keys().hasAll(['id', 'clinicId', 'patientId', 'status']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.clinicId is string && data.clinicId.size() <= 128 &&
+        data.patientId is string && data.patientId.size() <= 128 &&
+        data.status in ['requested', 'preparing', 'ready_for_pickup', 'collected', 'expired'];
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'body', 'type', 'read']) &&
+        data.id is string && data.id.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.title is string && data.title.size() <= 150 &&
+        data.body is string && data.body.size() <= 500 &&
+        data.type in ['queue_update', 'appointment_reminder', 'medication_ready', 'system'] &&
+        data.read is bool;
+    }
+
+    // --- Collection Rules ---
+
+    // USERS Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && incoming().role == 'patient';
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && isValidUser(incoming()) && incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phone', 'idNumber', 'updatedAt'])) ||
+        isAdmin()
+      );
+    }
+
+    // HOUSEHOLD PROXIES Subcollection
+    match /users/{userId}/householdProxies/{proxyId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidHouseholdProxy(incoming(), userId);
+      allow update, delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // CLINICS Collection
+    match /clinics/{clinicId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isAdmin();
+    }
+
+    // APPOINTMENTS Collection
+    match /appointments/{appointmentId} {
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow create: if isSignedIn() && isValidAppointment(incoming()) && (
+        incoming().patientId == request.auth.uid || isStaff()
+      );
+      allow update: if isSignedIn() && isValidAppointment(incoming()) && (
+        (existing().patientId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reason', 'scheduledDate', 'timeSlot', 'updatedAt']) && existing().status == 'scheduled') ||
+        isStaff()
+      );
+      allow delete: if isSignedIn() && (existing().patientId == request.auth.uid || isAdmin());
+    }
+
+    // QUEUES Collection (Real-Time Queue Management)
+    match /queues/{queueId} {
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow create: if isSignedIn() && isValidQueueItem(incoming()) && (
+        incoming().patientId == request.auth.uid || isStaff()
+      );
+      allow update: if isSignedIn() && isValidQueueItem(incoming()) && isStaff() && (
+        existing().stage != 'Completed' || isAdmin()
+      );
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // MEDICATION REQUESTS Collection
+    match /medication_requests/{requestId} {
+      allow get: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.patientId == request.auth.uid || isStaff());
+      allow create: if isSignedIn() && isValidMedicationRequest(incoming()) && (
+        incoming().patientId == request.auth.uid || isStaff()
+      );
+      allow update: if isSignedIn() && isValidMedicationRequest(incoming()) && (
+        isPharmacistOrAdmin() || isDoctorOrAdmin() || isClerkOrAdmin() ||
+        (existing().patientId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status']) && incoming().status == 'cancelled')
+      );
+    }
+
+    // NOTIFICATIONS Collection
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

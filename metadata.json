@@ -1,0 +1,6 @@
+{
+  "name": "Base 45 Innovation Group — Digital Health Platform",
+  "description": "Streamline patient flow, clinic queue management, appointment booking, workstation PC authorizations, Vercel deployments, and clinic staff workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

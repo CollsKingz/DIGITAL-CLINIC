@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "name": "base45-digital-clinic-app",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "env": {
+    "VITE_FIREBASE_PROJECT_ID": "digital-clinic-app",
+    "VITE_FIREBASE_AUTH_DOMAIN": "digital-clinic-app.firebaseapp.com"
+  }
+}
