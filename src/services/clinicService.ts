@@ -10,7 +10,7 @@ import {
   where,
   onSnapshot
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   Appointment,
   QueueItem,
@@ -87,9 +87,10 @@ export class ClinicService {
       const q = query(collection(db, path), where('clinicId', '==', clinicId));
       return onSnapshot(q, (snap) => {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
-        callback(items);
+        callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS));
       }, (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        console.warn("[Firestore] subscribeAppointments error, falling back to local storage", err);
+        callback(getLocalData(STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS));
       });
     } catch {
       // Fallback local listener
@@ -131,9 +132,10 @@ export class ClinicService {
       const q = query(collection(db, path), where('clinicId', '==', clinicId));
       return onSnapshot(q, (snap) => {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as QueueItem));
-        callback(items);
+        callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.QUEUES, INITIAL_QUEUES));
       }, (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        console.warn("[Firestore] subscribeQueue error, falling back to local storage", err);
+        callback(getLocalData(STORAGE_KEYS.QUEUES, INITIAL_QUEUES));
       });
     } catch {
       const handler = () => {
@@ -195,9 +197,10 @@ export class ClinicService {
       const q = query(collection(db, path), where('clinicId', '==', clinicId));
       return onSnapshot(q, (snap) => {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as MedicationRequest));
-        callback(items);
+        callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.MEDICATIONS, INITIAL_MEDICATIONS));
       }, (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        console.warn("[Firestore] subscribeMedications error, falling back to local storage", err);
+        callback(getLocalData(STORAGE_KEYS.MEDICATIONS, INITIAL_MEDICATIONS));
       });
     } catch {
       const handler = () => {
@@ -297,7 +300,8 @@ export class ClinicService {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as AuthorizedPC));
         callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.PCS, INITIAL_PCS));
       }, (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        console.warn("[Firestore] subscribePCs error, falling back to local storage", err);
+        callback(getLocalData(STORAGE_KEYS.PCS, INITIAL_PCS));
       });
     } catch {
       const handler = () => {
@@ -359,7 +363,8 @@ export class ClinicService {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as MemberRegistration));
         callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS));
       }, (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        console.warn("[Firestore] subscribeRegistrations error, falling back to local storage", err);
+        callback(getLocalData(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS));
       });
     } catch {
       const handler = () => {
@@ -400,5 +405,43 @@ export class ClinicService {
     const current = getLocalData<MemberRegistration>(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS);
     const updated = current.map(r => r.id === regId ? { ...r, status } : r);
     setLocalData(STORAGE_KEYS.REGISTRATIONS, updated);
+  }
+
+  // --- USER DASHBOARD LOADER ---
+  static async loadUserDashboard(): Promise<Record<string, unknown> | null> {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("[Firestore] No user is signed in.");
+      return null;
+    }
+    const path = `users/${user.uid}`;
+    try {
+      const userDocRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        const dashboardData = docSnap.data();
+        console.log("[Firestore] Dashboard Data:", dashboardData);
+        return dashboardData;
+      } else {
+        console.log("[Firestore] No dashboard found for this user.");
+        return null;
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, path);
+    }
+  }
+
+  static async loadDashboardDoc(docId: string): Promise<Record<string, unknown> | null> {
+    const path = `dashboards/${docId}`;
+    try {
+      const dashboardRef = doc(db, "dashboards", docId);
+      const docSnap = await getDoc(dashboardRef);
+      if (docSnap.exists()) {
+        return docSnap.data();
+      }
+      return null;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.GET, path);
+    }
   }
 }

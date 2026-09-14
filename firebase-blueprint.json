@@ -199,6 +199,19 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "fullName", "email", "requestedRole", "status"]
+    },
+    "Dashboard": {
+      "title": "User Personal Dashboard Data",
+      "description": "User specific dashboard preferences, metrics, and state data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "preferences": { "type": "object" },
+        "recentActivity": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId"]
     }
   },
   "firestore": {
@@ -237,6 +250,10 @@
     "member_registrations/{registrationId}": {
       "schema": { "$ref": "#/entities/MemberRegistration" },
       "description": "Member registration requests."
+    },
+    "dashboards/{docId}": {
+      "schema": { "$ref": "#/entities/Dashboard" },
+      "description": "User specific dashboard preferences and stored data."
     }
   }
 }
