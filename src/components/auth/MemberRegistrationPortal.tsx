@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
 import { useAuth } from '../../context/AuthContext';
+import { ClinicService } from '../../services/clinicService';
 import { UserRole, MemberRegistration } from '../../types/schema';
 import { Base45Logo } from '../brand/Base45Logo';
 import {
@@ -15,8 +18,32 @@ import {
   User,
   Search,
   Filter,
+  AlertCircle,
   X
 } from 'lucide-react';
+
+const registrationValidationSchema = Yup.object({
+  fullName: Yup.string()
+    .trim()
+    .required('Full name is required')
+    .min(2, 'Full name must be at least 2 characters'),
+  email: Yup.string()
+    .trim()
+    .required('Email address is required')
+    .email('Please enter a valid email address'),
+  phone: Yup.string()
+    .trim()
+    .matches(/^[+0-9\s-]*$/, 'Please enter a valid phone number format')
+    .optional(),
+  requestedRole: Yup.string()
+    .required('Please select a requested member role'),
+  department: Yup.string().when('requestedRole', {
+    is: (role: string) => role !== 'patient',
+    then: (schema) => schema.trim().required('Clinical department is required for staff roles'),
+    otherwise: (schema) => schema.optional()
+  }),
+  idNumber: Yup.string().optional()
+});
 
 const INITIAL_REGISTRATIONS: MemberRegistration[] = [
   {
@@ -60,49 +87,65 @@ export const MemberRegistrationPortal: React.FC<{
   onClose?: () => void;
   onOpenGoogleAuth?: () => void;
 }> = ({ onClose, onOpenGoogleAuth }) => {
-  const { user, role, sendAlert } = useAuth();
+  const { user, sendAlert } = useAuth();
   const [registrations, setRegistrations] = useState<MemberRegistration[]>(INITIAL_REGISTRATIONS);
   const [activeTab, setActiveTab] = useState<'register' | 'approval' | 'directory'>('register');
-
-  // Form State
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [requestedRole, setRequestedRole] = useState<UserRole>('patient');
-  const [department, setDepartment] = useState('');
-  const [idNumber, setIdNumber] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName || !email) return;
+  const formik = useFormik({
+    initialValues: {
+      fullName: '',
+      email: '',
+      phone: '',
+      requestedRole: 'patient' as UserRole,
+      department: '',
+      idNumber: ''
+    },
+    validationSchema: registrationValidationSchema,
+    onSubmit: async (values, { resetForm }) => {
+      const newReg: MemberRegistration = {
+        id: `reg-${Date.now().toString().slice(-4)}`,
+        fullName: values.fullName,
+        email: values.email,
+        phone: values.phone || undefined,
+        requestedRole: values.requestedRole,
+        department: values.department || undefined,
+        idNumber: values.idNumber || undefined,
+        status: values.requestedRole === 'patient' ? 'approved' : 'pending',
+        authProvider: 'email',
+        registeredAt: new Date().toLocaleString()
+      };
 
-    const newReg: MemberRegistration = {
-      id: `reg-${Date.now().toString().slice(-4)}`,
-      fullName,
-      email,
-      phone,
-      requestedRole,
-      department: department || undefined,
-      idNumber: idNumber || undefined,
-      status: requestedRole === 'patient' ? 'approved' : 'pending',
-      authProvider: 'email',
-      registeredAt: new Date().toLocaleString()
-    };
+      try {
+        await ClinicService.createRegistration({
+          fullName: values.fullName,
+          email: values.email,
+          phone: values.phone || undefined,
+          requestedRole: values.requestedRole,
+          department: values.department || undefined,
+          idNumber: values.idNumber || undefined,
+          authProvider: 'email',
+        });
+      } catch (err) {
+        console.warn("Firestore registration log warning", err);
+      }
 
-    setRegistrations(prev => [newReg, ...prev]);
-    setSubmitted(true);
-    await sendAlert(
-      "New Member Registration",
-      `${fullName} requested registration as ${requestedRole.toUpperCase()}.`
-    );
-  };
+      setRegistrations(prev => [newReg, ...prev]);
+      setSubmitted(true);
+      await sendAlert(
+        "New Member Registration",
+        `${values.fullName} requested registration as ${values.requestedRole.toUpperCase()}.`
+      );
+      resetForm();
+    }
+  });
 
   const handleApprove = async (regId: string) => {
     setRegistrations(prev =>
       prev.map(r => r.id === regId ? { ...r, status: 'approved', approvedBy: user.fullName } : r)
     );
+    await ClinicService.updateRegistrationStatus(regId, 'approved');
     await sendAlert("Registration Approved", `Member account #${regId} has been approved.`);
   };
 
@@ -110,6 +153,7 @@ export const MemberRegistrationPortal: React.FC<{
     setRegistrations(prev =>
       prev.map(r => r.id === regId ? { ...r, status: 'rejected' } : r)
     );
+    await ClinicService.updateRegistrationStatus(regId, 'rejected');
     await sendAlert("Registration Rejected", `Member account #${regId} was declined.`);
   };
 
@@ -222,7 +266,7 @@ export const MemberRegistrationPortal: React.FC<{
               <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
               <h3 className="text-base font-bold text-emerald-900">Registration Submitted Successfully!</h3>
               <p className="text-xs text-emerald-700">
-                Your account registration has been logged. {requestedRole !== 'patient' ? 'Staff credentials are undergoing Admin review.' : 'You may now log in.'}
+                Your account registration has been logged. {formik.values.requestedRole !== 'patient' ? 'Staff credentials are undergoing Admin review.' : 'You may now log in.'}
               </p>
               <button
                 onClick={() => setSubmitted(false)}
@@ -232,7 +276,7 @@ export const MemberRegistrationPortal: React.FC<{
               </button>
             </div>
           ) : (
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
+            <form onSubmit={formik.handleSubmit} className="space-y-4">
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -241,12 +285,23 @@ export const MemberRegistrationPortal: React.FC<{
                   </label>
                   <input
                     type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    name="fullName"
+                    value={formik.values.fullName}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                     placeholder="e.g. Dr. Jane Smith"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden"
-                    required
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:ring-2 focus:outline-hidden ${
+                      formik.touched.fullName && formik.errors.fullName
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500/20 focus:border-rose-500'
+                        : 'border-slate-200 focus:ring-teal-500/20 focus:border-teal-500'
+                    }`}
                   />
+                  {formik.touched.fullName && formik.errors.fullName && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formik.errors.fullName}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -255,12 +310,23 @@ export const MemberRegistrationPortal: React.FC<{
                   </label>
                   <input
                     type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    name="email"
+                    value={formik.values.email}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                     placeholder="name@example.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden"
-                    required
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:ring-2 focus:outline-hidden ${
+                      formik.touched.email && formik.errors.email
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500/20 focus:border-rose-500'
+                        : 'border-slate-200 focus:ring-teal-500/20 focus:border-teal-500'
+                    }`}
                   />
+                  {formik.touched.email && formik.errors.email && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formik.errors.email}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -271,11 +337,23 @@ export const MemberRegistrationPortal: React.FC<{
                   </label>
                   <input
                     type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    name="phone"
+                    value={formik.values.phone}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                     placeholder="+27 82 000 0000"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:ring-2 focus:outline-hidden ${
+                      formik.touched.phone && formik.errors.phone
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500/20 focus:border-rose-500'
+                        : 'border-slate-200 focus:ring-teal-500/20 focus:border-teal-500'
+                    }`}
                   />
+                  {formik.touched.phone && formik.errors.phone && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formik.errors.phone}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -283,9 +361,11 @@ export const MemberRegistrationPortal: React.FC<{
                     Requested Member Role *
                   </label>
                   <select
-                    value={requestedRole}
-                    onChange={(e) => setRequestedRole(e.target.value as UserRole)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden font-semibold"
+                    name="requestedRole"
+                    value={formik.values.requestedRole}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden font-semibold cursor-pointer"
                   >
                     <option value="patient">Patient / Community Member</option>
                     <option value="clerk">Intake Administration Clerk</option>
@@ -296,24 +376,37 @@ export const MemberRegistrationPortal: React.FC<{
                 </div>
               </div>
 
-              {requestedRole !== 'patient' && (
+              {formik.values.requestedRole !== 'patient' && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Clinical Department / Speciality
+                    Clinical Department / Speciality *
                   </label>
                   <input
                     type="text"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    name="department"
+                    value={formik.values.department}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
                     placeholder="e.g. Chronic Care / Emergency Desk"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden"
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:ring-2 focus:outline-hidden ${
+                      formik.touched.department && formik.errors.department
+                        ? 'border-rose-400 bg-rose-50/20 focus:ring-rose-500/20 focus:border-rose-500'
+                        : 'border-slate-200 focus:ring-teal-500/20 focus:border-teal-500'
+                    }`}
                   />
+                  {formik.touched.department && formik.errors.department && (
+                    <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{formik.errors.department}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                disabled={!formik.isValid}
+                className="w-full py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 Complete Member Registration
               </button>

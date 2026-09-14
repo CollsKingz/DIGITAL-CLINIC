@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
 import { useAuth } from '../../context/AuthContext';
 import { ClinicService } from '../../services/clinicService';
 import { ServiceType, PriorityLevel, HouseholdProxy } from '../../types/schema';
@@ -13,17 +15,27 @@ import {
   Sparkles
 } from 'lucide-react';
 
+const appointmentValidationSchema = Yup.object({
+  bookingFor: Yup.string().required('Please select who this appointment is for'),
+  serviceType: Yup.string().required('Please select a service type'),
+  scheduledDate: Yup.string()
+    .required('Target date is required')
+    .test('not-past-date', 'Date cannot be in the past', (value) => {
+      if (!value) return false;
+      const today = new Date().toISOString().split('T')[0];
+      return value >= today;
+    }),
+  timeSlot: Yup.string().required('Preferred time slot is required'),
+  priority: Yup.string().required('Priority level is required'),
+  reason: Yup.string()
+    .trim()
+    .required('Symptoms or purpose of visit is required')
+    .min(5, 'Please provide at least 5 characters describing your symptoms or visit reason')
+});
+
 export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = ({ onBookingSuccess }) => {
   const { user, clinic, sendAlert } = useAuth();
   const [proxies, setProxies] = useState<HouseholdProxy[]>([]);
-
-  // Form fields
-  const [bookingFor, setBookingFor] = useState<'self' | string>('self');
-  const [serviceType, setServiceType] = useState<ServiceType>('General Consult');
-  const [reason, setReason] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
-  const [timeSlot, setTimeSlot] = useState('09:30 AM');
-  const [priority, setPriority] = useState<PriorityLevel>('standard');
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -32,63 +44,72 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
     return () => unsub();
   }, [user.uid]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reason.trim()) return;
+  const formik = useFormik({
+    initialValues: {
+      bookingFor: 'self',
+      serviceType: 'General Consult' as ServiceType,
+      scheduledDate: new Date().toISOString().split('T')[0],
+      timeSlot: '09:30 AM',
+      priority: 'standard' as PriorityLevel,
+      reason: ''
+    },
+    validationSchema: appointmentValidationSchema,
+    onSubmit: async (values, { resetForm }) => {
+      setSubmitting(true);
+      setSuccessMsg(null);
+      try {
+        const selectedProxy = proxies.find(p => p.id === values.bookingFor);
+        const isProxy = values.bookingFor !== 'self' && !!selectedProxy;
 
-    setSubmitting(true);
-    try {
-      const selectedProxy = proxies.find(p => p.id === bookingFor);
-      const isProxy = bookingFor !== 'self' && !!selectedProxy;
-
-      const newApt = await ClinicService.createAppointment({
-        clinicId: clinic.id,
-        patientId: user.uid,
-        patientName: isProxy ? selectedProxy.fullName : user.fullName,
-        proxyId: isProxy ? selectedProxy.id : undefined,
-        proxyName: isProxy ? `${selectedProxy.fullName} (${selectedProxy.relationship})` : undefined,
-        isProxyBooking: isProxy,
-        serviceType,
-        reason,
-        scheduledDate,
-        timeSlot,
-        status: 'scheduled',
-        priority
-      });
-
-      // Automatically generate a check-in ticket if booking for today
-      const isToday = scheduledDate === new Date().toISOString().split('T')[0];
-      if (isToday) {
-        const ticketNum = `${serviceType.slice(0,1).toUpperCase()}-${Math.floor(100 + Math.random() * 800)}`;
-        await ClinicService.checkInPatient({
-          ticketNumber: ticketNum,
+        const newApt = await ClinicService.createAppointment({
           clinicId: clinic.id,
-          appointmentId: newApt.id,
           patientId: user.uid,
           patientName: isProxy ? selectedProxy.fullName : user.fullName,
-          isProxy,
-          proxyName: isProxy ? selectedProxy.fullName : undefined,
-          stage: 'Checked In',
-          priority,
-          estimatedWaitMins: priority === 'emergency' ? 0 : 20,
+          proxyId: isProxy ? selectedProxy.id : undefined,
+          proxyName: isProxy ? `${selectedProxy.fullName} (${selectedProxy.relationship})` : undefined,
+          isProxyBooking: isProxy,
+          serviceType: values.serviceType,
+          reason: values.reason,
+          scheduledDate: values.scheduledDate,
+          timeSlot: values.timeSlot,
+          status: 'scheduled',
+          priority: values.priority
         });
 
-        await sendAlert(
-          `Checked In: Ticket #${ticketNum}`,
-          `Appointment confirmed for ${isProxy ? selectedProxy.fullName : user.fullName}. Your ticket ${ticketNum} is active in queue.`,
-          user.uid
-        );
-      }
+        // Automatically generate a check-in ticket if booking for today
+        const isToday = values.scheduledDate === new Date().toISOString().split('T')[0];
+        if (isToday) {
+          const ticketNum = `${values.serviceType.slice(0,1).toUpperCase()}-${Math.floor(100 + Math.random() * 800)}`;
+          await ClinicService.checkInPatient({
+            ticketNumber: ticketNum,
+            clinicId: clinic.id,
+            appointmentId: newApt.id,
+            patientId: user.uid,
+            patientName: isProxy ? selectedProxy.fullName : user.fullName,
+            isProxy,
+            proxyName: isProxy ? selectedProxy.fullName : undefined,
+            stage: 'Checked In',
+            priority: values.priority,
+            estimatedWaitMins: values.priority === 'emergency' ? 0 : 20,
+          });
 
-      setSuccessMsg(`Appointment booked successfully! ${isToday ? 'You are checked into today\'s live queue.' : 'Reminder added.'}`);
-      setReason('');
-      if (onBookingSuccess) onBookingSuccess();
-    } catch (err) {
-      console.error("Booking failed", err);
-    } finally {
-      setSubmitting(false);
+          await sendAlert(
+            `Checked In: Ticket #${ticketNum}`,
+            `Appointment confirmed for ${isProxy ? selectedProxy.fullName : user.fullName}. Your ticket ${ticketNum} is active in queue.`,
+            user.uid
+          );
+        }
+
+        setSuccessMsg(`Appointment booked successfully! ${isToday ? 'You are checked into today\'s live queue.' : 'Reminder added.'}`);
+        resetForm();
+        if (onBookingSuccess) onBookingSuccess();
+      } catch (err) {
+        console.error("Booking failed", err);
+      } finally {
+        setSubmitting(false);
+      }
     }
-  };
+  });
 
   return (
     <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm">
@@ -109,7 +130,7 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={formik.handleSubmit} className="space-y-6">
 
         {/* Booking Target (Self vs Household Proxy) */}
         <div>
@@ -119,9 +140,9 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => setBookingFor('self')}
+              onClick={() => formik.setFieldValue('bookingFor', 'self')}
               className={`p-3.5 rounded-2xl border text-left flex items-center space-x-3 transition-all cursor-pointer ${
-                bookingFor === 'self'
+                formik.values.bookingFor === 'self'
                   ? 'border-teal-500 bg-teal-50/50 text-teal-900 ring-2 ring-teal-500/20'
                   : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
               }`}
@@ -137,9 +158,9 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               <button
                 type="button"
                 key={p.id}
-                onClick={() => setBookingFor(p.id)}
+                onClick={() => formik.setFieldValue('bookingFor', p.id)}
                 className={`p-3.5 rounded-2xl border text-left flex items-center space-x-3 transition-all cursor-pointer ${
-                  bookingFor === p.id
+                  formik.values.bookingFor === p.id
                     ? 'border-teal-500 bg-teal-50/50 text-teal-900 ring-2 ring-teal-500/20'
                     : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                 }`}
@@ -152,6 +173,12 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               </button>
             ))}
           </div>
+          {formik.touched.bookingFor && formik.errors.bookingFor && (
+            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{formik.errors.bookingFor}</span>
+            </p>
+          )}
         </div>
 
         {/* Service Type Selection */}
@@ -171,9 +198,9 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               <button
                 type="button"
                 key={st}
-                onClick={() => setServiceType(st as ServiceType)}
+                onClick={() => formik.setFieldValue('serviceType', st as ServiceType)}
                 className={`py-2.5 px-3 rounded-xl border text-xs font-medium text-center transition-all cursor-pointer ${
-                  serviceType === st
+                  formik.values.serviceType === st
                     ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                 }`}
@@ -182,6 +209,12 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               </button>
             ))}
           </div>
+          {formik.touched.serviceType && formik.errors.serviceType && (
+            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{formik.errors.serviceType}</span>
+            </p>
+          )}
         </div>
 
         {/* Date and Time Slot */}
@@ -193,12 +226,24 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
             <div className="relative">
               <input
                 type="date"
-                value={scheduledDate}
+                name="scheduledDate"
+                value={formik.values.scheduledDate}
                 min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden"
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:outline-hidden ${
+                  formik.touched.scheduledDate && formik.errors.scheduledDate
+                    ? 'border-rose-400 bg-rose-50/20 text-rose-900 focus:ring-rose-500/20 focus:border-rose-500'
+                    : 'border-slate-200 text-slate-800 focus:ring-teal-500/20 focus:border-teal-500'
+                }`}
               />
             </div>
+            {formik.touched.scheduledDate && formik.errors.scheduledDate && (
+              <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{formik.errors.scheduledDate}</span>
+              </p>
+            )}
           </div>
 
           <div>
@@ -206,14 +251,26 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               Preferred Slot
             </label>
             <select
-              value={timeSlot}
-              onChange={(e) => setTimeSlot(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden cursor-pointer bg-white"
+              name="timeSlot"
+              value={formik.values.timeSlot}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:ring-2 focus:outline-hidden cursor-pointer bg-white ${
+                formik.touched.timeSlot && formik.errors.timeSlot
+                  ? 'border-rose-400 text-rose-900 focus:ring-rose-500/20 focus:border-rose-500'
+                  : 'border-slate-200 text-slate-800 focus:ring-teal-500/20 focus:border-teal-500'
+              }`}
             >
               {['08:00 AM', '09:00 AM', '10:00 AM', '11:30 AM', '01:30 PM', '03:00 PM'].map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+            {formik.touched.timeSlot && formik.errors.timeSlot && (
+              <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{formik.errors.timeSlot}</span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -231,9 +288,9 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
               <button
                 type="button"
                 key={p.id}
-                onClick={() => setPriority(p.id as PriorityLevel)}
+                onClick={() => formik.setFieldValue('priority', p.id as PriorityLevel)}
                 className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-all cursor-pointer ${
-                  priority === p.id ? 'ring-2 ring-teal-500/40 font-bold border-teal-500' : p.class
+                  formik.values.priority === p.id ? 'ring-2 ring-teal-500/40 font-bold border-teal-500' : p.class
                 }`}
               >
                 {p.label}
@@ -249,18 +306,29 @@ export const AppointmentBooking: React.FC<{ onBookingSuccess?: () => void }> = (
           </label>
           <textarea
             rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            name="reason"
+            value={formik.values.reason}
+            onChange={formik.handleChange}
+            onBlur={formik.handleBlur}
             placeholder="Describe symptoms, requested medication refills, or special assistance needed..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 font-normal focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-hidden resize-none"
-            required
+            className={`w-full px-3.5 py-2.5 rounded-xl border text-xs focus:ring-2 focus:outline-hidden resize-none ${
+              formik.touched.reason && formik.errors.reason
+                ? 'border-rose-400 bg-rose-50/20 text-rose-900 focus:ring-rose-500/20 focus:border-rose-500'
+                : 'border-slate-200 text-slate-800 focus:ring-teal-500/20 focus:border-teal-500'
+            }`}
           />
+          {formik.touched.reason && formik.errors.reason && (
+            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{formik.errors.reason}</span>
+            </p>
+          )}
         </div>
 
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={submitting || !reason.trim()}
+          disabled={submitting || !formik.isValid}
           className="w-full py-3 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs tracking-wide shadow-md shadow-teal-600/20 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
         >
           {submitting ? (
