@@ -1,6 +1,12 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDocFromServer,
+  enableMultiTabIndexedDbPersistence,
+  enableIndexedDbPersistence
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -8,6 +14,31 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with Database ID from config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Enable Firestore Offline Persistence for uninterrupted clinic queue management
+export let isOfflinePersistenceEnabled = false;
+
+enableMultiTabIndexedDbPersistence(db)
+  .then(() => {
+    isOfflinePersistenceEnabled = true;
+    console.log('[Firebase Persistence] Multi-tab offline persistence active. Queue data synced locally.');
+  })
+  .catch((err) => {
+    if (err.code === 'failed-precondition') {
+      enableIndexedDbPersistence(db)
+        .then(() => {
+          isOfflinePersistenceEnabled = true;
+          console.log('[Firebase Persistence] Single-tab offline persistence active.');
+        })
+        .catch((singleErr) => {
+          console.warn('[Firebase Persistence] Offline persistence unavailable in this browser session:', singleErr.code);
+        });
+    } else if (err.code === 'unimplemented') {
+      console.warn('[Firebase Persistence] Browser does not support IndexedDB local caching.');
+    } else {
+      console.warn('[Firebase Persistence] Persistence initialization notice:', err);
+    }
+  });
 
 // Initialize Firebase Auth
 export const auth = getAuth(app);

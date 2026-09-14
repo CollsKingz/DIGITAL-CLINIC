@@ -15,6 +15,8 @@ import { VercelConnectModal } from './components/integration/VercelConnectModal'
 import { PCAuthorizationManager } from './components/security/PCAuthorizationManager';
 import { MemberRegistrationPortal } from './components/auth/MemberRegistrationPortal';
 import { GoogleAuthModal } from './components/auth/GoogleAuthModal';
+import { ClinicPresentationSlides } from './components/presentation/ClinicPresentationSlides';
+import { OfflineNetworkBanner } from './components/common/OfflineNetworkBanner';
 import { ErrorButton } from './components/ErrorButton';
 import { Base45Logo } from './components/brand/Base45Logo';
 import { HouseholdProxy } from './types/schema';
@@ -33,7 +35,8 @@ import {
   Globe,
   Monitor,
   UserPlus,
-  LogIn
+  LogIn,
+  Presentation
 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -54,9 +57,13 @@ const MainAppContent: React.FC = () => {
   const [showPcAuthModal, setShowPcAuthModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState(false);
+  const [showSlidesModal, setShowSlidesModal] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased selection:bg-teal-500 selection:text-white flex flex-col">
+
+      {/* Real-Time Network Offline Banner */}
+      <OfflineNetworkBanner />
 
       {/* Header Navigation Bar with Persona Switcher & Feature Launchers */}
       <Navbar
@@ -64,6 +71,7 @@ const MainAppContent: React.FC = () => {
         onOpenPcAuth={() => setShowPcAuthModal(true)}
         onOpenMembers={() => setShowMembersModal(true)}
         onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
+        onOpenSlides={() => setShowSlidesModal(true)}
       />
 
       {/* Quick Launch Banner for BASE 45 Innovation Group Features */}
@@ -76,6 +84,14 @@ const MainAppContent: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3 text-slate-300 font-medium">
+            <button
+              onClick={() => setShowSlidesModal(true)}
+              className="hover:text-purple-300 text-purple-400 font-bold flex items-center space-x-1 cursor-pointer bg-purple-950/60 px-2 py-0.5 rounded border border-purple-700/50"
+            >
+              <Presentation className="w-3.5 h-3.5 text-purple-400" />
+              <span>System Slides</span>
+            </button>
+            <span>•</span>
             <button
               onClick={() => setShowVercelModal(true)}
               className="hover:text-white flex items-center space-x-1 cursor-pointer"
@@ -356,6 +372,12 @@ const MainAppContent: React.FC = () => {
       )}
 
       {showGoogleAuthModal && <GoogleAuthModal onClose={() => setShowGoogleAuthModal(false)} />}
+
+      {/* Professional Orientation & System Presentation Deck */}
+      <ClinicPresentationSlides
+        isOpen={showSlidesModal}
+        onClose={() => setShowSlidesModal(false)}
+      />
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200/80 py-6 text-center text-xs text-slate-400">

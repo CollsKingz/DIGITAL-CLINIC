@@ -4,12 +4,19 @@ import * as Sentry from '@sentry/react';
 import App from './App.tsx';
 import './index.css';
 
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    tracesSampleRate: 1.0,
-  });
+const rawDsn = import.meta.env.VITE_SENTRY_DSN;
+if (rawDsn) {
+  const cleanDsn = String(rawDsn).trim().replace(/['",;]+$/, '').replace(/^['"]+/, '');
+  if (cleanDsn) {
+    try {
+      Sentry.init({
+        dsn: cleanDsn,
+        tracesSampleRate: 1.0,
+      });
+    } catch (err) {
+      console.warn("Failed to initialize Sentry with provided DSN:", err);
+    }
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

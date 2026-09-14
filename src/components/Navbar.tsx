@@ -22,7 +22,8 @@ import {
   Globe,
   Monitor,
   UserPlus,
-  LogIn
+  LogIn,
+  Presentation
 } from 'lucide-react';
 
 export const Navbar: React.FC<{
@@ -30,7 +31,8 @@ export const Navbar: React.FC<{
   onOpenPcAuth?: () => void;
   onOpenMembers?: () => void;
   onOpenGoogleAuth?: () => void;
-}> = ({ onOpenVercel, onOpenPcAuth, onOpenMembers, onOpenGoogleAuth }) => {
+  onOpenSlides?: () => void;
+}> = ({ onOpenVercel, onOpenPcAuth, onOpenMembers, onOpenGoogleAuth, onOpenSlides }) => {
   const {
     user,
     role,
@@ -109,6 +111,15 @@ export const Navbar: React.FC<{
             >
               <LogIn className="w-3.5 h-3.5 text-sky-600" />
               <span>Google Sign-In</span>
+            </button>
+
+            <button
+              onClick={onOpenSlides}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all flex items-center space-x-1 cursor-pointer"
+              title="View Professional Orientation & System Slides"
+            >
+              <Presentation className="w-3.5 h-3.5 text-purple-600" />
+              <span>System Slides</span>
             </button>
 
             <ErrorButton />
