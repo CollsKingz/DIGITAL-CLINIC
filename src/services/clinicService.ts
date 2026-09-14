@@ -10,21 +10,25 @@ import {
   where,
   onSnapshot
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import {
   Appointment,
   QueueItem,
   MedicationRequest,
   HouseholdProxy,
   AppNotification,
-  QueueStage
+  QueueStage,
+  AuthorizedPC,
+  MemberRegistration
 } from '../types/schema';
 import {
   INITIAL_APPOINTMENTS,
   INITIAL_QUEUES,
   INITIAL_MEDICATIONS,
   INITIAL_PROXIES,
-  INITIAL_NOTIFICATIONS
+  INITIAL_NOTIFICATIONS,
+  INITIAL_PCS,
+  INITIAL_REGISTRATIONS
 } from './mockData';
 
 // LOCAL STORAGE FALLBACK AGGREGATOR FOR INSTANT PREVIEW & FAULT-TOLERANCE
@@ -33,7 +37,9 @@ const STORAGE_KEYS = {
   QUEUES: 'dclinic_queues',
   MEDICATIONS: 'dclinic_medications',
   PROXIES: 'dclinic_proxies',
-  NOTIFICATIONS: 'dclinic_notifications'
+  NOTIFICATIONS: 'dclinic_notifications',
+  PCS: 'dclinic_pcs',
+  REGISTRATIONS: 'dclinic_registrations'
 };
 
 function getLocalData<T>(key: string, initial: T[]): T[] {
@@ -280,5 +286,119 @@ export class ClinicService {
     const current = getLocalData<AppNotification>(STORAGE_KEYS.NOTIFICATIONS, INITIAL_NOTIFICATIONS);
     const updated = current.map(n => n.id === id ? { ...n, read: true } : n);
     setLocalData(STORAGE_KEYS.NOTIFICATIONS, updated);
+  }
+
+  // --- AUTHORIZED PCS ---
+  static subscribePCs(callback: (pcs: AuthorizedPC[]) => void) {
+    const path = 'authorized_pcs';
+    try {
+      const q = collection(db, path);
+      return onSnapshot(q, (snap) => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as AuthorizedPC));
+        callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.PCS, INITIAL_PCS));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.GET, path);
+      });
+    } catch {
+      const handler = () => {
+        callback(getLocalData(STORAGE_KEYS.PCS, INITIAL_PCS));
+      };
+      window.addEventListener('dclinic_state_change', handler);
+      handler();
+      return () => window.removeEventListener('dclinic_state_change', handler);
+    }
+  }
+
+  static async addPC(pcData: Omit<AuthorizedPC, 'id' | 'authorizedAt'>): Promise<AuthorizedPC> {
+    const newId = `pc-${Date.now().toString().slice(-6)}`;
+    const fullPc: AuthorizedPC = {
+      ...pcData,
+      id: newId,
+      authorizedAt: new Date().toISOString()
+    };
+    const path = `authorized_pcs/${newId}`;
+    try {
+      await setDoc(doc(db, 'authorized_pcs', newId), fullPc);
+    } catch (err) {
+      console.warn("Firestore addPC fallback", err);
+    }
+    const current = getLocalData<AuthorizedPC>(STORAGE_KEYS.PCS, INITIAL_PCS);
+    setLocalData(STORAGE_KEYS.PCS, [fullPc, ...current]);
+    return fullPc;
+  }
+
+  static async updatePCStatus(pcId: string, status: AuthorizedPC['status']): Promise<void> {
+    const path = `authorized_pcs/${pcId}`;
+    try {
+      await updateDoc(doc(db, 'authorized_pcs', pcId), { status });
+    } catch (err) {
+      console.warn("Firestore updatePCStatus fallback", err);
+    }
+    const current = getLocalData<AuthorizedPC>(STORAGE_KEYS.PCS, INITIAL_PCS);
+    const updated = current.map(p => p.id === pcId ? { ...p, status } : p);
+    setLocalData(STORAGE_KEYS.PCS, updated);
+  }
+
+  static async deletePC(pcId: string): Promise<void> {
+    const path = `authorized_pcs/${pcId}`;
+    try {
+      await deleteDoc(doc(db, 'authorized_pcs', pcId));
+    } catch (err) {
+      console.warn("Firestore deletePC fallback", err);
+    }
+    const current = getLocalData<AuthorizedPC>(STORAGE_KEYS.PCS, INITIAL_PCS);
+    setLocalData(STORAGE_KEYS.PCS, current.filter(p => p.id !== pcId));
+  }
+
+  // --- MEMBER REGISTRATIONS ---
+  static subscribeRegistrations(callback: (regs: MemberRegistration[]) => void) {
+    const path = 'member_registrations';
+    try {
+      const q = collection(db, path);
+      return onSnapshot(q, (snap) => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as MemberRegistration));
+        callback(items.length > 0 ? items : getLocalData(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.GET, path);
+      });
+    } catch {
+      const handler = () => {
+        callback(getLocalData(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS));
+      };
+      window.addEventListener('dclinic_state_change', handler);
+      handler();
+      return () => window.removeEventListener('dclinic_state_change', handler);
+    }
+  }
+
+  static async createRegistration(regData: Omit<MemberRegistration, 'id' | 'registeredAt' | 'status'>): Promise<MemberRegistration> {
+    const newId = `reg-${Date.now().toString().slice(-6)}`;
+    const fullReg: MemberRegistration = {
+      ...regData,
+      id: newId,
+      status: 'pending',
+      registeredAt: new Date().toISOString()
+    };
+    const path = `member_registrations/${newId}`;
+    try {
+      await setDoc(doc(db, 'member_registrations', newId), fullReg);
+    } catch (err) {
+      console.warn("Firestore createRegistration fallback", err);
+    }
+    const current = getLocalData<MemberRegistration>(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS);
+    setLocalData(STORAGE_KEYS.REGISTRATIONS, [fullReg, ...current]);
+    return fullReg;
+  }
+
+  static async updateRegistrationStatus(regId: string, status: MemberRegistration['status']): Promise<void> {
+    const path = `member_registrations/${regId}`;
+    try {
+      await updateDoc(doc(db, 'member_registrations', regId), { status });
+    } catch (err) {
+      console.warn("Firestore updateRegistrationStatus fallback", err);
+    }
+    const current = getLocalData<MemberRegistration>(STORAGE_KEYS.REGISTRATIONS, INITIAL_REGISTRATIONS);
+    const updated = current.map(r => r.id === regId ? { ...r, status } : r);
+    setLocalData(STORAGE_KEYS.REGISTRATIONS, updated);
   }
 }

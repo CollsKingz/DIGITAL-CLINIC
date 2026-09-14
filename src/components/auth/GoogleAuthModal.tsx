@@ -4,21 +4,26 @@ import { Base45Logo } from '../brand/Base45Logo';
 import { ShieldCheck, CheckCircle2, Lock, X } from 'lucide-react';
 
 export const GoogleAuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { switchPersona, sendAlert } = useAuth();
+  const { signInWithGoogle, sendAlert } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [signedInUser, setSignedInUser] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    setTimeout(async () => {
+    setAuthError(null);
+    try {
+      const profile = await signInWithGoogle();
       setIsLoading(false);
-      setSignedInUser('Madihlaba T. (madihlabatc77@gmail.com)');
-      switchPersona('patient');
+      setSignedInUser(`${profile.fullName} (${profile.email})`);
       await sendAlert(
         "Google Authentication Successful",
-        "Signed in via Google OAuth (madihlabatc77@gmail.com)."
+        `Signed in via Google OAuth (${profile.email}). Profile stored in Firestore.`
       );
-    }, 1500);
+    } catch (err) {
+      setIsLoading(false);
+      setAuthError(err instanceof Error ? err.message : 'Google authentication failed');
+    }
   };
 
   return (
@@ -54,6 +59,12 @@ export const GoogleAuthModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
           </div>
         ) : (
           <div className="space-y-4">
+            {authError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {authError}
+              </div>
+            )}
+
             <button
               onClick={handleGoogleSignIn}
               disabled={isLoading}

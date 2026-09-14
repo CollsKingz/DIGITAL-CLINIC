@@ -156,6 +156,49 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "title", "body", "type"]
+    },
+    "AuthorizedPC": {
+      "title": "Authorized Clinical Workstation",
+      "description": "Authorized PC device for clinical intake and dispensing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "pcName": { "type": "string", "maxLength": 100 },
+        "ipAddress": { "type": "string", "maxLength": 45 },
+        "macHash": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "maxLength": 100 },
+        "pairingCode": { "type": "string", "maxLength": 20 },
+        "status": {
+          "type": "string",
+          "enum": ["Authorized", "Pending", "Revoked"]
+        },
+        "authorizedBy": { "type": "string", "maxLength": 100 },
+        "authorizedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "pcName", "ipAddress", "status"]
+    },
+    "MemberRegistration": {
+      "title": "Member Onboarding Registration",
+      "description": "User registration request awaiting IT admin verification.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 100 },
+        "requestedRole": {
+          "type": "string",
+          "enum": ["patient", "clerk", "pharmacist", "doctor", "admin"]
+        },
+        "professionalLicense": { "type": "string", "maxLength": 50 },
+        "idNumber": { "type": "string", "maxLength": 30 },
+        "phone": { "type": "string", "maxLength": 20 },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "fullName", "email", "requestedRole", "status"]
     }
   },
   "firestore": {
@@ -186,6 +229,14 @@
     "notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },
       "description": "User alerts and notifications."
+    },
+    "authorized_pcs/{pcId}": {
+      "schema": { "$ref": "#/entities/AuthorizedPC" },
+      "description": "Workstation authorization records."
+    },
+    "member_registrations/{registrationId}": {
+      "schema": { "$ref": "#/entities/MemberRegistration" },
+      "description": "Member registration requests."
     }
   }
 }

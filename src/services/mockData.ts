@@ -334,3 +334,58 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
     createdAt: '2026-09-14T09:12:00Z'
   }
 ];
+
+export const INITIAL_PCS = [
+  {
+    id: 'pc-001',
+    machineName: 'RECEPTION-DESK-PC-01',
+    ipAddress: '192.168.10.42',
+    macHostHash: 'B4-9821-PC-01',
+    clinicId: 'clinic-central',
+    roomOrDepartment: 'Main Reception & Intake',
+    status: 'authorized' as const,
+    authorizedBy: 'Alex Morgan (Admin)',
+    authorizedAt: '2026-09-01T08:00:00Z',
+    lastActiveAt: new Date().toISOString()
+  },
+  {
+    id: 'pc-002',
+    machineName: 'PHARMACY-DISPENSE-PC-02',
+    ipAddress: '192.168.10.88',
+    macHostHash: 'B4-9821-PC-02',
+    clinicId: 'clinic-central',
+    roomOrDepartment: 'Pharmacy Counter 2',
+    status: 'authorized' as const,
+    authorizedBy: 'Alex Morgan (Admin)',
+    authorizedAt: '2026-09-02T09:15:00Z',
+    lastActiveAt: new Date().toISOString()
+  }
+];
+
+export const INITIAL_REGISTRATIONS = [
+  {
+    id: 'reg-001',
+    fullName: 'Dr. Thabo Mbeki',
+    email: 'thabo.mbeki@clinic.gov',
+    phone: '+27 83 111 2233',
+    requestedRole: 'doctor' as const,
+    department: 'General Pediatrics',
+    idNumber: '7804125091081',
+    status: 'pending' as const,
+    authProvider: 'google' as const,
+    registeredAt: '2026-09-14T08:30:00Z'
+  },
+  {
+    id: 'reg-002',
+    fullName: 'Nomvula Zulu (Pharmacist Assistant)',
+    email: 'nomvula.zulu@clinic.gov',
+    phone: '+27 72 444 5566',
+    requestedRole: 'pharmacist' as const,
+    department: 'Chronic Batch Prep',
+    idNumber: '8910120033089',
+    status: 'approved' as const,
+    authProvider: 'google' as const,
+    registeredAt: '2026-09-13T14:10:00Z',
+    approvedBy: 'Alex Morgan (Admin)'
+  }
+];
